@@ -1,0 +1,135 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:pins
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm check:no-pack-literals
+
+  types:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:coverage
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  contract-drift:
+    # Always a hard gate. It is offline and deterministic: a pure function of
+    # contract/openapi.json + backend-version.txt + the pinned
+    # openapi-typescript/prettier versions. There is no legitimate reason for
+    # this to be red.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm generate:types
+      - name: src/types/api.d.ts is in sync with contract/openapi.json
+        run: git diff --exit-code -- src/types/api.d.ts contract/openapi.json
+
+  contract-live:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      - id: pin
+        run: echo "value=$(cat backend-version.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: No backend release pinned yet
+        if: steps.pin.outputs.value == 'unpinned'
+        run: |
+          echo "::warning title=Contract unpinned::backend-version.txt is 'unpinned'. The live-backend contract check is skipped until apos-backend cuts its first release. The offline drift gate still ran and passed."
+
+      - name: Log in to ghcr.io
+        if: steps.pin.outputs.value != 'unpinned'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify contract against the pinned backend image
+        if: steps.pin.outputs.value != 'unpinned'
+        env:
+          IMAGE: ghcr.io/danielyinanc/apos-backend:${{ steps.pin.outputs.value }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE"
+          docker run -d --name apos-backend -p 8000:8000 -e APOS_ENVIRONMENT=dev "$IMAGE"
+          pnpm verify:contract --backend http://localhost:8000 --wait 60 --strict
+
+  docker-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: apos-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test the image
+        run: |
+          set -euo pipefail
+          docker run -d --name fe -p 3000:3000 \
+            -e APOS_ENV=dev -e BACKEND_URL=http://127.0.0.1:8000 -e APOS_API_TOKEN=dev-insecure-token \
+            apos-frontend:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/healthz; then exit 0; fi
+            sleep 2
+          done
+          docker logs fe; exit 1

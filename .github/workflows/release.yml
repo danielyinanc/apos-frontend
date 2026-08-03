@@ -1,0 +1,80 @@
+name: release
+
+on:
+  push:
+    tags: ['frontend-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: version
+        run: |
+          echo "value=${GITHUB_REF_NAME#frontend-v}" >> "$GITHUB_OUTPUT"
+          echo "backend=$(cat backend-version.txt)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # This step has an `id`, so `steps.build.outputs.digest` actually
+      # resolves -- apos-backend's release workflow writes `digest=` from a
+      # step with no `id:`, so its reference always renders empty. Not copied.
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:latest
+
+      - name: Summarise
+        run: |
+          {
+            echo "image:  ghcr.io/${{ github.repository }}:${{ github.ref_name }}"
+            echo "digest: ${{ steps.build.outputs.digest }}"
+            echo "backend contract: $(cat backend-version.txt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: frontend ${{ steps.version.outputs.value }}
+          body: |
+            Image: `ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
+            Digest: `${{ steps.build.outputs.digest }}`
+            Backend contract: `${{ steps.version.outputs.backend }}`
+          files: |
+            contract/openapi.json
+            src/types/api.d.ts
+            backend-version.txt
+
+      - name: Notify apos-platform
+        if: ${{ vars.NOTIFY_PLATFORM == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
+        run: |
+          gh api repos/danielyinanc/apos-platform/dispatches \
+            -f event_type=apos-frontend-release \
+            -f 'client_payload[version]=${{ github.ref_name }}' \
+            -f 'client_payload[image]=ghcr.io/${{ github.repository }}:${{ github.ref_name }}' \
+            -f 'client_payload[digest]=${{ steps.build.outputs.digest }}'

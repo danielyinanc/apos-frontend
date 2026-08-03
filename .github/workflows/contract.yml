@@ -1,0 +1,81 @@
+name: contract
+
+on:
+  repository_dispatch:
+    types: [apos-backend-release]
+  schedule:
+    - cron: '17 6 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'apos-backend tag, e.g. backend-v0.2.0'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      - id: target
+        env:
+          GH_TOKEN: ${{ secrets.CONTRACT_PAT }}
+        run: |
+          set -euo pipefail
+          TARGET='${{ github.event.client_payload.version || inputs.version }}'
+          if [ -z "$TARGET" ]; then
+            TARGET=$(gh api repos/danielyinanc/apos-backend/releases/latest --jq .tag_name)
+          fi
+          CURRENT=$(cat backend-version.txt)
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          if [ "$TARGET" = "$CURRENT" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Already pinned to $CURRENT."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Re-pin and regenerate
+        if: steps.target.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.CONTRACT_PAT }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' '${{ steps.target.outputs.target }}' > backend-version.txt
+          pnpm contract:sync
+
+      - uses: peter-evans/create-pull-request@v7
+        if: steps.target.outputs.changed == 'true'
+        with:
+          token: ${{ secrets.CONTRACT_PAT }}
+          branch: contract/${{ steps.target.outputs.target }}
+          base: main
+          commit-message: 'chore(contract): pin apos-backend ${{ steps.target.outputs.target }}'
+          title: 'chore(contract): pin apos-backend ${{ steps.target.outputs.target }}'
+          labels: contract
+          delete-branch: true
+          add-paths: |
+            backend-version.txt
+            contract/openapi.json
+            src/types/api.d.ts
+          body: |
+            Bumps the pinned backend contract.
+
+            | | |
+            |---|---|
+            | from | `${{ steps.target.outputs.current }}` |
+            | to | `${{ steps.target.outputs.target }}` |
+
+            Regenerated with `pnpm contract:sync`.
+
+            **Review `src/types/api.d.ts`, not `contract/openapi.json`.** The type diff is the
+            semantic one: a removed field, a narrowed union, or a changed required-ness will
+            show up as a TypeScript error somewhere in `src/`, and `ci / types` will say where.

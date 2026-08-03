@@ -1,0 +1,16 @@
+# pnpm 11 reads ALL non-auth settings from this file. .npmrc is auth-only and gitignored.
+# Single-package repo: no `packages:` key, so only the root package is in the workspace.
+
+# --- Build scripts -------------------------------------------------------
+# strictDepBuilds defaults to true in v11: an unreviewed postinstall fails the
+# install. Every entry below was reviewed. `pnpm approve-builds` maintains this.
+allowBuilds:
+  esbuild: true
+  '@tailwindcss/oxide': true
+  sharp: true
+  unrs-resolver: true
+  msw: true
+
+# --- Ergonomics ------------------------------------------------------------
+strictPeerDependencies: false
+dedupePeerDependents: true
