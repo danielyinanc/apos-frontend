@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
 import type { AposUIMessage } from '@/lib/ai/messages';
+import { createAposChatTransport } from '@/lib/ai/transport';
 import { Header } from '@/components/layout/Header';
 import { RightRail } from '@/components/layout/RightRail';
 import { Transcript, findBlockedOutcome, BlockedByCompliance } from '@/components/chat/Transcript';
@@ -12,45 +12,52 @@ import { StreamingLiveRegion } from '@/components/chat/StreamingLiveRegion';
 
 export default function Page() {
   const [threadId] = useState(() => `t-${crypto.randomUUID()}`);
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport<AposUIMessage>({
-        api: '/api/chat',
-        prepareSendMessagesRequest: ({ messages, body }) => {
-          const last = messages[messages.length - 1];
-          const text = last?.parts.find((p) => p.type === 'text')?.text ?? '';
-          return { body: { message: text, thread_id: threadId, ...(body as object) } };
-        },
-      }),
-    [threadId],
-  );
-  const { messages, sendMessage, status } = useChat<AposUIMessage>({ transport });
+  const transport = useMemo(() => createAposChatTransport(), []);
+
+  // sendMessage()'s promise resolves even when the transport request fails
+  // (HTTP errors and network errors alike funnel into useChat's own `error`
+  // state via onError) -- it never rejects. A ref is the only way to read
+  // that failure synchronously right after the await below, since the
+  // `error` binding closed over by `decide`/`modify` is fixed at the time
+  // those closures were created, not live-updated by later renders.
+  const lastErrorRef = useRef<Error | null>(null);
+  const { messages, sendMessage, status, clearError } = useChat<AposUIMessage>({
+    transport,
+    onError: (err) => {
+      // The transport's error message is the raw response body text (often
+      // an RFC 9457 problem+json document from our route handlers) --
+      // surface `detail` when present instead of a raw JSON blob.
+      let message = err.message;
+      try {
+        const problem = JSON.parse(err.message) as { detail?: unknown };
+        if (typeof problem.detail === 'string') message = problem.detail;
+      } catch {
+        // not JSON -- use the message as-is
+      }
+      lastErrorRef.current = new Error(message);
+    },
+  });
 
   const lastMessage = messages[messages.length - 1];
   const blocked = lastMessage ? findBlockedOutcome(lastMessage) : null;
 
   const decide = async (tid: string, interruptId: string, action: 'approve' | 'reject') => {
-    const res = await fetch('/api/approve', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ thread_id: tid, interrupt_id: interruptId, action }),
+    lastErrorRef.current = null;
+    clearError();
+    await sendMessage(undefined, {
+      body: { kind: action, thread_id: tid, interrupt_id: interruptId },
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(body.detail ?? `${res.status}`);
-    }
+    if (lastErrorRef.current) throw lastErrorRef.current;
   };
 
   const modify = async (tid: string, interruptId: string, message: string) => {
-    const res = await fetch('/api/approvals/modify', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ thread_id: tid, interrupt_id: interruptId, message }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(body.detail ?? `${res.status}`);
-    }
+    lastErrorRef.current = null;
+    clearError();
+    await sendMessage(
+      { text: message },
+      { body: { kind: 'modify', thread_id: tid, interrupt_id: interruptId } },
+    );
+    if (lastErrorRef.current) throw lastErrorRef.current;
   };
 
   return (
@@ -70,7 +77,9 @@ export default function Page() {
           )}
           <Composer
             disabled={status === 'streaming' || status === 'submitted'}
-            onSend={(message) => sendMessage({ text: message })}
+            onSend={(message) =>
+              sendMessage({ text: message }, { body: { kind: 'chat', thread_id: threadId } })
+            }
           />
         </main>
         <RightRail />

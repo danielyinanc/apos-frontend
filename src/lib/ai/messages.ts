@@ -22,7 +22,12 @@ export type AposDataParts = {
     tsMs: number;
     runId: string;
   };
-  'apos-compliance': { status: 'PASS' | 'FAIL' | 'ERROR'; ruleIds: string[]; tsMs: number };
+  'apos-compliance': {
+    status: 'PASS' | 'FAIL' | 'ERROR';
+    ruleIds: string[];
+    tsMs: number;
+    runId: string;
+  };
   'apos-capability-status': { capabilityId: string; reason: string; tsMs: number };
   'apos-interrupt': {
     interruptId: string | null;

@@ -190,7 +190,7 @@ export function createAposToUiChunkStream(opts: {
           ctrl.enqueue({
             type: 'data-apos-compliance',
             id: `compliance:${env.run_id}`,
-            data: { status: d.status, ruleIds: d.rules, tsMs },
+            data: { status: d.status, ruleIds: d.rules, tsMs, runId: env.run_id },
           });
           return;
         }

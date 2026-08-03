@@ -101,17 +101,34 @@ export function Transcript({
   );
 }
 
+/**
+ * "Blocked by compliance" must be gated on the LATEST run having actually
+ * finished -- the backend emits `compliance` mid-stream, well before
+ * `run.finished`, so deriving blocked from compliance alone would flash the
+ * blocked banner while a response is still streaming (or after an error/
+ * interrupt on an unrelated run). `data-apos-run` parts are never removed
+ * (a resumed run appends a NEW part with a new run id, pushed at the end of
+ * `parts[]`), so the last one is always the most recent run for this message.
+ */
 export function findBlockedOutcome(
   message: AposUIMessage,
 ): { status: 'FAIL' | 'ERROR'; ruleIds: string[] } | null {
-  const hasInterrupt = message.parts.some((p) => p.type === 'data-apos-interrupt');
-  if (hasInterrupt) return null;
-  const compliance = [...message.parts]
+  const latestRun = [...message.parts]
     .reverse()
-    .find(
-      (p): p is Extract<typeof p, { type: 'data-apos-compliance' }> =>
-        p.type === 'data-apos-compliance',
-    );
+    .find((p): p is Extract<typeof p, { type: 'data-apos-run' }> => p.type === 'data-apos-run');
+  if (!latestRun || latestRun.data.phase !== 'finished') return null;
+  if (latestRun.data.status !== 'completed') return null; // 'interrupted' or 'error'
+
+  const runId = latestRun.data.runId;
+  const hasInterruptForRun = message.parts.some(
+    (p) => p.type === 'data-apos-interrupt' && p.data.runId === runId,
+  );
+  if (hasInterruptForRun) return null;
+
+  const compliance = message.parts.find(
+    (p): p is Extract<typeof p, { type: 'data-apos-compliance' }> =>
+      p.type === 'data-apos-compliance' && p.data.runId === runId,
+  );
   if (compliance && compliance.data.status !== 'PASS') {
     return { status: compliance.data.status, ruleIds: compliance.data.ruleIds };
   }
