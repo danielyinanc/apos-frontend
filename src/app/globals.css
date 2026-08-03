@@ -1,0 +1,26 @@
+@import 'tailwindcss';
+
+:root {
+  --color-bg: #0b0c0f;
+  --color-panel: #14161b;
+  --color-border: #262a33;
+  --color-fg: #e6e8eb;
+  --color-fg-muted: #9aa2af;
+  --color-accent: #5b8def;
+  --color-positive: #3fb950;
+  --color-negative: #f85149;
+  --color-caution: #d29922;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
