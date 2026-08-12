@@ -11,6 +11,7 @@ function descriptor(overrides: Partial<PacksActive['capabilities'][number]>[]): 
       capability_id: `cap.${i}`,
       kind: 'risk_measure',
       description: `Capability ${i}`,
+      provider_service: null,
       status: null,
       ...o,
     })),
@@ -102,5 +103,37 @@ describe('CapabilityStatusList', () => {
     );
     render(<CapabilityStatusList index={index} />);
     expect(screen.getByText(/Since/)).toBeInTheDocument();
+  });
+
+  it('renders the provider service when present, and omits the line when absent', () => {
+    const index = buildCapabilityIndex(
+      descriptor([
+        {
+          capability_id: 'cap.provided',
+          provider_service: 'risk-analytics',
+          status: {
+            capability_id: 'cap.provided',
+            status: 'degraded',
+            reason: 'slow',
+            since: null,
+          },
+        },
+        {
+          capability_id: 'cap.noprovider',
+          provider_service: null,
+          status: {
+            capability_id: 'cap.noprovider',
+            status: 'degraded',
+            reason: 'slow',
+            since: null,
+          },
+        },
+      ]),
+    );
+    render(<CapabilityStatusList index={index} />);
+    expect(screen.getByText('Provider: risk-analytics')).toBeInTheDocument();
+    // exactly one "Provider:" line -- the capability with no provider_service
+    // renders no line for it at all, not an empty one.
+    expect(screen.getAllByText(/^Provider:/)).toHaveLength(1);
   });
 });

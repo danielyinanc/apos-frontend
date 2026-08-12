@@ -6,7 +6,11 @@ import { server } from '../../tests/msw/server';
 import { packsActiveMbs } from '../../tests/factories/packs';
 import { qk } from '@/lib/query/keys';
 import type { PacksActive } from '@/lib/format/capability';
-import { buildCapabilityIndex, patchCapabilityStatus } from '@/lib/format/capability';
+import {
+  PacksActive as PacksActiveSchema,
+  buildCapabilityIndex,
+  patchCapabilityStatus,
+} from '@/lib/format/capability';
 import { CapabilityStatusList } from '@/components/schema/CapabilityStatusList';
 import { Transcript } from '@/components/chat/Transcript';
 import type { AposUIMessage } from '@/lib/ai/messages';
@@ -22,7 +26,14 @@ import type { AposUIMessage } from '@/lib/ai/messages';
 function Harness() {
   const packs = useQuery({
     queryKey: qk.packs,
-    queryFn: () => fetch('/api/apos/packs/active').then((r) => r.json()) as Promise<PacksActive>,
+    // Must go through the same zod parse the real usePacksActive hook uses
+    // -- apos-backend a2d2234 flattened status/reason/since onto the wire,
+    // and a raw fetch+cast would silently skip the normalization that turns
+    // that flat shape back into the nested one components read.
+    queryFn: () =>
+      fetch('/api/apos/packs/active')
+        .then((r) => r.json())
+        .then(PacksActiveSchema.parse),
   });
   if (!packs.data) return <p>loading…</p>;
   const index = buildCapabilityIndex(packs.data);

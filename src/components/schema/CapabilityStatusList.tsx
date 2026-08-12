@@ -56,6 +56,11 @@ export function CapabilityStatusList({ index }: { index: CapabilityIndex }) {
             <div className="text-[var(--color-fg-muted)]">
               {c.status?.reason ?? 'No reason published.'}
             </div>
+            {c.provider_service && (
+              <div className="text-xs text-[var(--color-fg-muted)]">
+                Provider: {c.provider_service}
+              </div>
+            )}
             {c.status?.since && (
               <div className="text-xs text-[var(--color-fg-muted)]">
                 Since {relativeSince(c.status.since)}

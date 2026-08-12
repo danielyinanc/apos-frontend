@@ -12,12 +12,14 @@ const descriptor: PacksActive = {
       capability_id: 'r.available',
       kind: 'risk_measure',
       description: 'Available Measure',
+      provider_service: null,
       status: { capability_id: 'r.available', status: 'available', reason: null, since: null },
     },
     {
       capability_id: 'r.uncovered_unavailable',
       kind: 'risk_measure',
       description: 'Uncovered Unavailable Measure',
+      provider_service: null,
       status: {
         capability_id: 'r.uncovered_unavailable',
         status: 'unavailable',
@@ -29,6 +31,7 @@ const descriptor: PacksActive = {
       capability_id: 'r.covered_degraded',
       kind: 'risk_measure',
       description: 'Covered Degraded Measure',
+      provider_service: null,
       status: {
         capability_id: 'r.covered_degraded',
         status: 'degraded',

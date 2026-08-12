@@ -117,13 +117,23 @@ function OtherCapabilities({ index }: { index: ReturnType<typeof buildCapability
           const status = c.status?.status;
           const isUnavailable = status === 'unavailable';
           const isDegraded = status === 'degraded';
+          const titleParts = [
+            c.status?.reason ?? undefined,
+            c.provider_service ? `provider: ${c.provider_service}` : undefined,
+          ].filter((s): s is string => Boolean(s));
+          const label = index.label(c.capability_id);
           return (
             <li
               key={c.capability_id}
               className={`flex items-center justify-between text-sm ${
-                isUnavailable ? 'text-[var(--color-fg-muted)] opacity-60' : ''
+                isUnavailable ? 'pointer-events-none text-[var(--color-fg-muted)] opacity-60' : ''
               }`}
-              title={c.status?.reason ? `${c.capability_id}: ${c.status.reason}` : c.capability_id}
+              // aria-disabled isn't a valid ARIA attribute on the implicit
+              // listitem role -- these rows have no click handler to begin
+              // with (nothing to "disable" as a widget), so unavailability
+              // is communicated through the accessible name instead.
+              aria-label={isUnavailable ? `${label} (unavailable)` : undefined}
+              title={titleParts.length > 0 ? titleParts.join(' — ') : c.capability_id}
             >
               <span className="flex items-center gap-1.5">
                 {isDegraded && (
@@ -132,7 +142,7 @@ function OtherCapabilities({ index }: { index: ReturnType<typeof buildCapability
                     className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-caution)]"
                   />
                 )}
-                {index.label(c.capability_id)}
+                {label}
               </span>
               <span className="text-[10px] text-[var(--color-fg-muted)]">{c.kind}</span>
             </li>
