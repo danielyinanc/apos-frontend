@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../../tests/msw/server';
@@ -100,9 +100,10 @@ describe.each(PACKS)('RightRail renders pack $name with zero code changes', ({ p
 
     renderWithProviders();
 
-    const nonAvailable = packs().capabilities.filter(
-      (c) => c.status && c.status.status !== 'available',
-    );
+    // packs() returns the WIRE shape (status is a flat string, per
+    // apos-backend a2d2234), unlike the app-level nested `c.status.status`
+    // components read after PacksActive.parse() transforms it.
+    const nonAvailable = packs().capabilities.filter((c) => c.status && c.status !== 'available');
     for (const c of nonAvailable) {
       const label = c.description || humanizeCapabilityId(c.capability_id);
       await screen.findAllByText(new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
@@ -110,5 +111,54 @@ describe.each(PACKS)('RightRail renders pack $name with zero code changes', ({ p
     if (nonAvailable.length > 0) {
       expect(await screen.findByLabelText('Capability issues')).toBeInTheDocument();
     }
+  });
+});
+
+describe('OtherCapabilities (catch-all for kinds with no dedicated panel)', () => {
+  it('marks an unavailable capability of an unrecognized kind as such in its accessible name, degraded distinctly, and never drops either', async () => {
+    server.use(
+      http.get('/api/apos/packs/active', () =>
+        HttpResponse.json({
+          pack_id: 'other-kinds',
+          version: '0.0.0',
+          capabilities: [
+            {
+              capability_id: 'x.tool.offline',
+              kind: 'tool',
+              description: 'Offline Tool',
+              provider_service: 'tool-service',
+              status: 'unavailable',
+              reason: 'tool service down',
+              since: null,
+            },
+            {
+              capability_id: 'x.tool.slow',
+              kind: 'tool',
+              description: 'Slow Tool',
+              status: 'degraded',
+              reason: 'slow',
+              since: null,
+            },
+          ],
+        }),
+      ),
+      http.get('/api/apos/portfolio/snapshot', () => HttpResponse.json(portfolioSnapshot())),
+      http.get('/api/apos/risk/measures', () => HttpResponse.json({ measures: [], degraded: [] })),
+      http.get('/api/apos/regime/current', () => HttpResponse.json({})),
+    );
+
+    renderWithProviders();
+
+    // "Offline Tool" also appears in the Capability Status digest above --
+    // scope to the "Other capabilities" list specifically.
+    const otherCapabilities = within(await screen.findByLabelText('Other capabilities'));
+    const offlineRow = otherCapabilities.getByText('Offline Tool').closest('li');
+    expect(offlineRow).toHaveAttribute('aria-label', 'Offline Tool (unavailable)');
+    expect(offlineRow).toHaveAttribute('title', 'tool service down — provider: tool-service');
+    expect(offlineRow?.className).toMatch(/opacity-60/);
+
+    const slowRow = otherCapabilities.getByText('Slow Tool').closest('li');
+    expect(slowRow).not.toHaveAttribute('aria-label');
+    expect(slowRow?.className).not.toBe(offlineRow?.className);
   });
 });

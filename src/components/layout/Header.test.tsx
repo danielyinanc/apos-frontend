@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../../tests/msw/server';
 import { packsActiveMbs } from '../../../tests/factories/packs';
-import type { PacksActive } from '@/lib/format/capability';
+import type { PacksActiveWire } from '@/lib/format/capability';
 import { Header } from './Header';
 
 function renderWithProviders() {
@@ -25,7 +25,7 @@ describe('Header', () => {
   });
 
   it('shows a persistent banner naming what cannot be answered when a capability is unavailable', async () => {
-    const withUnavailable: PacksActive = {
+    const withUnavailable: PacksActiveWire = {
       ...packsActiveMbs(),
       capabilities: [
         ...packsActiveMbs().capabilities,
@@ -33,12 +33,9 @@ describe('Header', () => {
           capability_id: 'mbs.factor_exposure',
           kind: 'risk_measure',
           description: 'Factor exposure',
-          status: {
-            capability_id: 'mbs.factor_exposure',
-            status: 'unavailable',
-            reason: 'model server down',
-            since: null,
-          },
+          status: 'unavailable',
+          reason: 'model server down',
+          since: null,
         },
       ],
     };

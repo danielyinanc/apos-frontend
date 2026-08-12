@@ -24,13 +24,21 @@ export function SpecialistModes({ index }: { index: CapabilityIndex }) {
       <ul className="flex flex-col gap-3">
         {modes.map((mode) => {
           const selected = focusModeId === mode.id;
+          const allUnavailable = mode.capabilityIds.every(
+            (id) => index.status(id)?.status === 'unavailable',
+          );
           return (
             <li key={mode.id}>
               <button
                 type="button"
                 aria-pressed={selected}
+                aria-disabled={allUnavailable || undefined}
+                disabled={allUnavailable}
+                title={
+                  allUnavailable ? 'Every capability in this focus is unavailable.' : undefined
+                }
                 onClick={() => setFocusMode(selected ? null : mode.id)}
-                className={`w-full rounded px-1.5 py-1 text-left text-sm font-medium ${
+                className={`w-full rounded px-1.5 py-1 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
                   selected
                     ? 'bg-[var(--color-panel)] text-[var(--color-accent)]'
                     : 'text-[var(--color-fg)]'
@@ -40,9 +48,17 @@ export function SpecialistModes({ index }: { index: CapabilityIndex }) {
               </button>
               <ul className="ml-2 flex flex-col gap-0.5 border-l border-[var(--color-border)] pl-2">
                 {mode.capabilityIds.map((id) => {
-                  const status = index.status(id)?.status;
+                  const capabilityStatus = index.status(id);
+                  const status = capabilityStatus?.status;
                   const isUnavailable = status === 'unavailable';
                   const isDegraded = status === 'degraded';
+                  const providerService = index.get(id)?.provider_service;
+                  const titleParts = [
+                    capabilityStatus?.reason,
+                    providerService ? `provider: ${providerService}` : null,
+                  ].filter(Boolean);
+
+                  const label = index.label(id);
                   return (
                     <li
                       key={id}
@@ -53,13 +69,12 @@ export function SpecialistModes({ index }: { index: CapabilityIndex }) {
                             ? 'text-[var(--color-caution)]'
                             : 'text-[var(--color-fg-muted)]'
                       }`}
-                      title={
-                        index.status(id)?.reason
-                          ? `${index.status(id)?.reason}`
-                          : isUnavailable
-                            ? 'Unavailable'
-                            : undefined
-                      }
+                      // aria-disabled isn't valid on the implicit listitem
+                      // role and there is no click handler here to disable
+                      // in the first place -- unavailability is communicated
+                      // through the accessible name instead.
+                      aria-label={isUnavailable ? `${label} (unavailable)` : undefined}
+                      title={titleParts.length > 0 ? titleParts.join(' — ') : undefined}
                     >
                       {isDegraded && (
                         <span
@@ -67,7 +82,7 @@ export function SpecialistModes({ index }: { index: CapabilityIndex }) {
                           className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-caution)]"
                         />
                       )}
-                      {index.label(id)}
+                      {label}
                     </li>
                   );
                 })}

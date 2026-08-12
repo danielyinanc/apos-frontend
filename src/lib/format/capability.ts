@@ -7,27 +7,71 @@ import { z } from 'zod';
  * schema validated at the BFF boundary, not a hand-typed interface that can
  * silently drift from the backend.
  */
-export const CapabilityStatus = z
+/**
+ * The APP-level status shape every component in this codebase reads. It
+ * predates apos-backend commit a2d2234, which flattened `status`/`reason`/
+ * `since` onto the capability itself on the wire (see Capability below) --
+ * this nested shape is kept as the post-parse representation so none of the
+ * many consumers of `c.status?.status` / `?.reason` / `?.since` had to
+ * change when the wire shape did.
+ */
+export const CapabilityStatusShape = z.object({
+  capability_id: z.string(),
+  // Open union, not z.enum -- a status value this build doesn't recognize
+  // must still validate and render (neutrally), never fail the whole
+  // packs/active fetch. See statusSentence()'s unrecognized-value branch.
+  status: z.string(),
+  reason: z.string().nullable(),
+  since: z.string().nullable(),
+});
+export type CapabilityStatus = z.infer<typeof CapabilityStatusShape> | null;
+
+/**
+ * `Capability` is a WIRE-to-APP transform, not a passthrough validator:
+ * apos-backend (commit a2d2234) flattens `provider_service`, `status`,
+ * `reason`, `since` directly onto each capability object -- `status` is now
+ * a plain string (available|degraded|unavailable|...), not the nested object
+ * this module used to receive. A `status_detail` field also ships, carrying
+ * the old nested shape, for backward compatibility with other consumers; we
+ * don't need it since we rebuild the same nested shape ourselves below.
+ *
+ * `z.input<typeof Capability>` is the WIRE type (used by test factories/MSW
+ * fixtures, which stand in for backend JSON); `z.infer<typeof Capability>`
+ * (the default) is the APP type every component reads.
+ */
+export const Capability = z
   .object({
     capability_id: z.string(),
-    // Open union, not z.enum -- a status value this build doesn't recognize
-    // must still validate and render (neutrally), never fail the whole
-    // packs/active fetch. See statusSentence()'s unrecognized-value branch.
-    status: z.string(),
-    reason: z.string().nullable(),
-    since: z.string().nullable(),
+    kind: z.string(), // open union: risk_measure|regime|signal|tool today, more later
+    // A backend build could plausibly send null/missing here even though
+    // today's contract types it as `str = ""` -- never let that crash rendering.
+    description: z.string().nullable().optional(),
+    // Which service answers this capability, so a broken model server can be
+    // told apart from a broken capability. Optional/nullable defensively --
+    // this field did not exist before a2d2234.
+    provider_service: z.string().nullable().optional(),
+    status: z.string().nullable().optional(),
+    reason: z.string().nullable().optional(),
+    since: z.string().nullable().optional(),
   })
-  .nullable();
-
-export const Capability = z.object({
-  capability_id: z.string(),
-  kind: z.string(), // open union: risk_measure|regime|signal|tool today, more later
-  // A backend build could plausibly send null/missing here even though
-  // today's contract types it as `str = ""` -- never let that crash rendering.
-  description: z.string().nullable().optional(),
-  status: CapabilityStatus,
-});
+  .passthrough()
+  .transform((c) => ({
+    capability_id: c.capability_id,
+    kind: c.kind,
+    description: c.description ?? null,
+    provider_service: c.provider_service ?? null,
+    status: c.status
+      ? {
+          capability_id: c.capability_id,
+          status: c.status,
+          reason: c.reason ?? null,
+          since: c.since ?? null,
+        }
+      : null,
+  }));
 export type Capability = z.infer<typeof Capability>;
+/** The wire shape backend JSON (and therefore test factories) is built in. */
+export type CapabilityWire = z.input<typeof Capability>;
 
 export const PacksActive = z.object({
   pack_id: z.string(),
@@ -35,6 +79,7 @@ export const PacksActive = z.object({
   capabilities: z.array(Capability),
 });
 export type PacksActive = z.infer<typeof PacksActive>;
+export type PacksActiveWire = z.input<typeof PacksActive>;
 
 /** "mbs.risk.oas" -> "Risk · Oas"; "equity.regime.trend" -> "Regime · Trend" */
 export function humanizeCapabilityId(id: string): string {
@@ -132,7 +177,13 @@ export function patchCapabilityStatus(
       ...data,
       capabilities: [
         ...data.capabilities,
-        { capability_id: capabilityId, kind: 'unknown', description: null, status: patchedStatus },
+        {
+          capability_id: capabilityId,
+          kind: 'unknown',
+          description: null,
+          provider_service: null,
+          status: patchedStatus,
+        },
       ],
     };
   }

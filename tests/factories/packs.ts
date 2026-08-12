@@ -1,7 +1,12 @@
-import type { PacksActive } from '@/lib/format/capability';
+import type { PacksActiveWire } from '@/lib/format/capability';
 import type { RegimeCurrent, RiskMeasures, PortfolioSnapshot } from '@/lib/format/schemas';
 
-export function packsActiveMbs(): PacksActive {
+// Wire shape (apos-backend commit a2d2234): status/reason/since/provider_service
+// are flat siblings on each capability, not a nested `status` object. These
+// factories stand in for raw backend JSON, so they're built in that shape --
+// `PacksActive.parse()` (a zod transform) is what normalizes it to the
+// nested app-level shape every component reads.
+export function packsActiveMbs(): PacksActiveWire {
   return {
     pack_id: 'mbs',
     version: '0.1.0',
@@ -10,35 +15,33 @@ export function packsActiveMbs(): PacksActive {
         capability_id: 'mbs.oas',
         kind: 'risk_measure',
         description: 'Option-adjusted spread',
-        status: { capability_id: 'mbs.oas', status: 'available', reason: null, since: null },
+        provider_service: 'mbs-analytics',
+        status: 'available',
+        reason: null,
+        since: null,
       },
       {
         capability_id: 'mbs.regime.macro',
         kind: 'regime',
         description: 'Macro regime',
-        status: {
-          capability_id: 'mbs.regime.macro',
-          status: 'available',
-          reason: null,
-          since: null,
-        },
+        status: 'available',
+        reason: null,
+        since: null,
       },
       {
         capability_id: 'mbs.prepaid_speed',
         kind: 'risk_measure',
         description: 'Prepayment speed',
-        status: {
-          capability_id: 'mbs.prepaid_speed',
-          status: 'degraded',
-          reason: 'model server responding slowly',
-          since: '2026-01-01T00:00:00Z',
-        },
+        provider_service: 'mbs-analytics',
+        status: 'degraded',
+        reason: 'model server responding slowly',
+        since: '2026-01-01T00:00:00Z',
       },
     ],
   };
 }
 
-export function packsActiveEquity(): PacksActive {
+export function packsActiveEquity(): PacksActiveWire {
   return {
     pack_id: 'equity',
     version: '0.1.0',
@@ -47,29 +50,27 @@ export function packsActiveEquity(): PacksActive {
         capability_id: 'equity.beta',
         kind: 'risk_measure',
         description: 'Beta',
-        status: { capability_id: 'equity.beta', status: 'available', reason: null, since: null },
+        provider_service: 'equity-analytics',
+        status: 'available',
+        reason: null,
+        since: null,
       },
       {
         capability_id: 'equity.regime.trend',
         kind: 'regime',
         description: 'Trend regime',
-        status: {
-          capability_id: 'equity.regime.trend',
-          status: 'available',
-          reason: null,
-          since: null,
-        },
+        status: 'available',
+        reason: null,
+        since: null,
       },
       {
         capability_id: 'equity.factor_exposure',
         kind: 'risk_measure',
         description: 'Factor exposure',
-        status: {
-          capability_id: 'equity.factor_exposure',
-          status: 'degraded',
-          reason: 'partial factor coverage',
-          since: '2026-01-01T00:00:00Z',
-        },
+        provider_service: 'equity-analytics',
+        status: 'degraded',
+        reason: 'partial factor coverage',
+        since: '2026-01-01T00:00:00Z',
       },
     ],
   };
@@ -77,7 +78,7 @@ export function packsActiveEquity(): PacksActive {
 
 /** Deliberately breaks assumptions: unknown kind, null description, unknown
  * units, unavailable capability, three regime axes with unknown values. */
-export function packsActiveSynthetic(): PacksActive {
+export function packsActiveSynthetic(): PacksActiveWire {
   return {
     pack_id: 'crypto',
     version: '0.9.0',
@@ -85,41 +86,33 @@ export function packsActiveSynthetic(): PacksActive {
       {
         capability_id: 'crypto.forecast.momentum',
         kind: 'forecast',
-        description: null as unknown as string,
+        description: null,
         status: null,
       },
       {
         capability_id: 'crypto.risk.sharpe_like',
         kind: 'risk_measure',
         description: 'Sharpe-like score',
-        status: {
-          capability_id: 'crypto.risk.sharpe_like',
-          status: 'available',
-          reason: null,
-          since: null,
-        },
+        status: 'available',
+        reason: null,
+        since: null,
       },
       {
         capability_id: 'crypto.risk.offline',
         kind: 'risk_measure',
         description: 'Offline measure',
-        status: {
-          capability_id: 'crypto.risk.offline',
-          status: 'unavailable',
-          reason: 'model server down',
-          since: null,
-        },
+        provider_service: 'crypto-model-server',
+        status: 'unavailable',
+        reason: 'model server down',
+        since: null,
       },
       {
         capability_id: 'crypto.regime.market',
         kind: 'regime',
         description: 'Market regime',
-        status: {
-          capability_id: 'crypto.regime.market',
-          status: 'available',
-          reason: null,
-          since: null,
-        },
+        status: 'available',
+        reason: null,
+        since: null,
       },
       {
         capability_id: 'crypto.tool.oracle',
@@ -129,12 +122,9 @@ export function packsActiveSynthetic(): PacksActive {
         // closed enum, precisely so a value like this still renders (see
         // statusSentence()'s fallback branch) instead of failing the whole
         // packs/active fetch.
-        status: {
-          capability_id: 'crypto.tool.oracle',
-          status: 'melting',
-          reason: 'vendor reported an unknown state',
-          since: '2026-01-01T00:00:00Z',
-        },
+        status: 'melting',
+        reason: 'vendor reported an unknown state',
+        since: '2026-01-01T00:00:00Z',
       },
     ],
   };

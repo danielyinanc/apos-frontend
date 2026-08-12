@@ -203,3 +203,11 @@ to `ghcr.io/<org>/apos-frontend` with SBOM + provenance attestation.
 >   SSE stream; the model lives entirely behind the backend.
 > - **No E2E framework.** Vitest + RTL cover component and contract-boundary behaviour;
 >   cross-repo E2E lives in apos-platform per the system's stated ownership split.
+> - **`GET /api/packs/active` has no typed OpenAPI response schema.** The route returns
+>   `dict[str, Any]`, so the generated `src/types/api.d.ts` collapses to `{[key: string]:
+unknown}` regardless of the pin. `capabilities[]` — including `provider_service`
+>   (added in apos-backend commit `a2d2234`, flattening `status`/`reason`/`since` directly
+>   onto each capability alongside a backward-compatible nested `status_detail`) — is only
+>   known through the hand-maintained zod schema in `src/lib/format/capability.ts`, which
+>   normalizes the flat wire shape back into the nested `{status, reason, since}` object
+>   every component reads. Backend ask: a real `response_model` on that route.

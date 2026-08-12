@@ -9,6 +9,7 @@ const base: PacksActive = {
       capability_id: 'mbs.oas',
       kind: 'risk_measure',
       description: 'Option-adjusted spread',
+      provider_service: null,
       status: { capability_id: 'mbs.oas', status: 'available', reason: null, since: null },
     },
   ],
@@ -58,6 +59,16 @@ describe('patchCapabilityStatus', () => {
     const added = patched.capabilities.find((c) => c.capability_id === 'mbs.new_thing');
     expect(added?.kind).toBe('unknown');
     expect(added?.status?.status).toBe('unavailable');
+    expect(added?.provider_service).toBeNull();
+  });
+
+  it('preserves provider_service on an existing capability across a patch', () => {
+    const withProvider: PacksActive = {
+      ...base,
+      capabilities: [{ ...base.capabilities[0]!, provider_service: 'mbs-analytics' }],
+    };
+    const patched = patchCapabilityStatus(withProvider, 'mbs.oas', 'degraded', 'slow');
+    expect(patched.capabilities[0]?.provider_service).toBe('mbs-analytics');
   });
 });
 
