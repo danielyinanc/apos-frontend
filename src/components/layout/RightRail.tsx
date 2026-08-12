@@ -126,7 +126,7 @@ function OtherCapabilities({ index }: { index: ReturnType<typeof buildCapability
             <li
               key={c.capability_id}
               className={`flex items-center justify-between text-sm ${
-                isUnavailable ? 'pointer-events-none text-[var(--color-fg-muted)] opacity-60' : ''
+                isUnavailable ? 'text-[var(--color-fg-muted)] opacity-60' : ''
               }`}
               // aria-disabled isn't a valid ARIA attribute on the implicit
               // listitem role -- these rows have no click handler to begin

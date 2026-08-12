@@ -64,7 +64,7 @@ export function SpecialistModes({ index }: { index: CapabilityIndex }) {
                       key={id}
                       className={`flex items-center gap-1.5 text-xs ${
                         isUnavailable
-                          ? 'pointer-events-none text-[var(--color-fg-muted)] opacity-60'
+                          ? 'text-[var(--color-fg-muted)] opacity-60'
                           : isDegraded
                             ? 'text-[var(--color-caution)]'
                             : 'text-[var(--color-fg-muted)]'
