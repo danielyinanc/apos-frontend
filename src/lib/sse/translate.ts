@@ -195,13 +195,19 @@ export function createAposToUiChunkStream(opts: {
           return;
         }
 
-        case 'capability.unavailable': {
-          const d = parseData(AposDataSchemas['capability.unavailable']);
+        case 'capability.unavailable':
+        case 'capability.degraded': {
+          const d = parseData(
+            env.type === 'capability.unavailable'
+              ? AposDataSchemas['capability.unavailable']
+              : AposDataSchemas['capability.degraded'],
+          );
           if (!d) return;
+          const status = env.type === 'capability.unavailable' ? 'unavailable' : 'degraded';
           ctrl.enqueue({
             type: 'data-apos-capability-status',
             id: `cap:${env.run_id}:${d.capability_id}`,
-            data: { capabilityId: d.capability_id, reason: d.reason, tsMs },
+            data: { capabilityId: d.capability_id, status, reason: d.reason, tsMs },
           });
           return;
         }
