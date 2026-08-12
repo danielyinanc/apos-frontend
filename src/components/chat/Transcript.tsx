@@ -37,12 +37,13 @@ export function Transcript({
               );
             }
             if (part.type === 'data-apos-capability-status') {
+              const tone =
+                part.data.status === 'unavailable'
+                  ? 'border-[var(--color-negative)] text-[var(--color-negative)]'
+                  : 'border-[var(--color-caution)] text-[var(--color-caution)]';
               return (
-                <div
-                  key={part.id ?? i}
-                  className="my-1 rounded border border-[var(--color-caution)] px-2 py-1 text-xs text-[var(--color-caution)]"
-                >
-                  {part.data.capabilityId} unavailable: {part.data.reason}
+                <div key={part.id ?? i} className={`my-1 rounded border px-2 py-1 text-xs ${tone}`}>
+                  {part.data.capabilityId} {part.data.status}: {part.data.reason}
                 </div>
               );
             }

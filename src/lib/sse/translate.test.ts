@@ -155,4 +155,55 @@ describe('createAposToUiChunkStream', () => {
     const chunks = await run(sse);
     expect(chunks.some((c) => c.type === 'data-apos-notice')).toBe(true);
   });
+
+  it('capability.unavailable emits a data-apos-capability-status part with status "unavailable"', async () => {
+    const sse = sseOf(
+      envelope(1, 'run.started', { thread_id: 't1', run_id: 'r1' }),
+      envelope(2, 'capability.unavailable', {
+        capability_id: 'mbs.oas',
+        reason: 'model server down',
+      }),
+      envelope(3, 'run.finished', { status: 'completed' }),
+    );
+    const chunks = await run(sse);
+    const part = chunks.find((c) => c.type === 'data-apos-capability-status');
+    expect(part?.type === 'data-apos-capability-status' && part.data).toEqual({
+      capabilityId: 'mbs.oas',
+      status: 'unavailable',
+      reason: 'model server down',
+      tsMs: 1002000,
+    });
+  });
+
+  it('capability.degraded emits a data-apos-capability-status part with status "degraded"', async () => {
+    const sse = sseOf(
+      envelope(1, 'run.started', { thread_id: 't1', run_id: 'r1' }),
+      envelope(2, 'capability.degraded', {
+        capability_id: 'mbs.prepaid_speed',
+        reason: 'slow responses',
+      }),
+      envelope(3, 'run.finished', { status: 'completed' }),
+    );
+    const chunks = await run(sse);
+    const part = chunks.find((c) => c.type === 'data-apos-capability-status');
+    expect(part?.type === 'data-apos-capability-status' && part.data.status).toBe('degraded');
+    expect(part?.type === 'data-apos-capability-status' && part.data.capabilityId).toBe(
+      'mbs.prepaid_speed',
+    );
+  });
+
+  it('a capability going unavailable mid-stream reconciles in place if the same capability was already degraded (same id)', async () => {
+    const sse = sseOf(
+      envelope(1, 'run.started', { thread_id: 't1', run_id: 'r1' }),
+      envelope(2, 'capability.degraded', { capability_id: 'mbs.oas', reason: 'slow' }),
+      envelope(3, 'capability.unavailable', { capability_id: 'mbs.oas', reason: 'now down' }),
+      envelope(4, 'run.finished', { status: 'completed' }),
+    );
+    const chunks = await run(sse);
+    const statusChunks = chunks.filter((c) => c.type === 'data-apos-capability-status');
+    expect(statusChunks).toHaveLength(2);
+    expect(statusChunks[0]?.type === 'data-apos-capability-status' && statusChunks[0].id).toBe(
+      statusChunks[1]?.type === 'data-apos-capability-status' && statusChunks[1].id,
+    );
+  });
 });

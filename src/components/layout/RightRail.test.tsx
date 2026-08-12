@@ -89,4 +89,26 @@ describe.each(PACKS)('RightRail renders pack $name with zero code changes', ({ p
     }
     expect(totalAxes).toBeGreaterThan(0);
   });
+
+  it('renders every non-available capability status generically, no capability names hardcoded', async () => {
+    server.use(
+      http.get('/api/apos/packs/active', () => HttpResponse.json(packs())),
+      http.get('/api/apos/portfolio/snapshot', () => HttpResponse.json(portfolioSnapshot())),
+      http.get('/api/apos/risk/measures', () => HttpResponse.json(riskMeasuresFor(key))),
+      http.get('/api/apos/regime/current', () => HttpResponse.json(regimeFor(key))),
+    );
+
+    renderWithProviders();
+
+    const nonAvailable = packs().capabilities.filter(
+      (c) => c.status && c.status.status !== 'available',
+    );
+    for (const c of nonAvailable) {
+      const label = c.description || humanizeCapabilityId(c.capability_id);
+      await screen.findAllByText(new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+    }
+    if (nonAvailable.length > 0) {
+      expect(await screen.findByLabelText('Capability issues')).toBeInTheDocument();
+    }
+  });
 });

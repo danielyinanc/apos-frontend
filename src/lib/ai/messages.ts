@@ -28,7 +28,12 @@ export type AposDataParts = {
     tsMs: number;
     runId: string;
   };
-  'apos-capability-status': { capabilityId: string; reason: string; tsMs: number };
+  'apos-capability-status': {
+    capabilityId: string;
+    status: 'degraded' | 'unavailable' | (string & {});
+    reason: string;
+    tsMs: number;
+  };
   'apos-interrupt': {
     interruptId: string | null;
     blotter: Blotter;

@@ -113,12 +113,31 @@ function OtherCapabilities({ index }: { index: ReturnType<typeof buildCapability
   return (
     <Section title="Other Capabilities">
       <ul className="flex flex-col gap-1" aria-label="Other capabilities">
-        {rest.map((c) => (
-          <li key={c.capability_id} className="flex items-center justify-between text-sm">
-            <span title={c.capability_id}>{index.label(c.capability_id)}</span>
-            <span className="text-[10px] text-[var(--color-fg-muted)]">{c.kind}</span>
-          </li>
-        ))}
+        {rest.map((c) => {
+          const status = c.status?.status;
+          const isUnavailable = status === 'unavailable';
+          const isDegraded = status === 'degraded';
+          return (
+            <li
+              key={c.capability_id}
+              className={`flex items-center justify-between text-sm ${
+                isUnavailable ? 'text-[var(--color-fg-muted)] opacity-60' : ''
+              }`}
+              title={c.status?.reason ? `${c.capability_id}: ${c.status.reason}` : c.capability_id}
+            >
+              <span className="flex items-center gap-1.5">
+                {isDegraded && (
+                  <span
+                    aria-hidden
+                    className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-caution)]"
+                  />
+                )}
+                {index.label(c.capability_id)}
+              </span>
+              <span className="text-[10px] text-[var(--color-fg-muted)]">{c.kind}</span>
+            </li>
+          );
+        })}
       </ul>
     </Section>
   );

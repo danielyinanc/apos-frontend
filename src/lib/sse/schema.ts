@@ -46,6 +46,7 @@ export const AposDataSchemas = {
   'capability.unavailable': z
     .object({ capability_id: z.string(), reason: z.string() })
     .passthrough(),
+  'capability.degraded': z.object({ capability_id: z.string(), reason: z.string() }).passthrough(),
   citation: z
     .object({
       capability_id: z.string(),

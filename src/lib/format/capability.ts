@@ -10,7 +10,10 @@ import { z } from 'zod';
 export const CapabilityStatus = z
   .object({
     capability_id: z.string(),
-    status: z.enum(['available', 'degraded', 'unavailable']),
+    // Open union, not z.enum -- a status value this build doesn't recognize
+    // must still validate and render (neutrally), never fail the whole
+    // packs/active fetch. See statusSentence()'s unrecognized-value branch.
+    status: z.string(),
     reason: z.string().nullable(),
     since: z.string().nullable(),
   })
@@ -79,4 +82,64 @@ const CANNOT_ANSWER: Record<string, (label: string) => string> = {
 
 export function cannotAnswerSentence(kind: string, label: string): string {
   return (CANNOT_ANSWER[kind] ?? ((l: string) => `${l} is unavailable right now.`))(label);
+}
+
+/** Same idea as CANNOT_ANSWER, but for a degraded (not fully down) capability
+ * -- answers may still be produced, just not trusted at face value. */
+const MAY_BE_INCOMPLETE: Record<string, (label: string) => string> = {
+  risk_measure: (l) => `Risk questions involving ${l} may be incomplete or stale.`,
+  regime: (l) => `${l} regime classification may be incomplete or stale.`,
+  signal: (l) => `Signals derived from ${l} may be incomplete or stale.`,
+  tool: (l) => `${l} may return incomplete or stale results.`,
+};
+
+/**
+ * Sentence for any status value, including one this build has never seen --
+ * `status` is a free string from the wire (see CapabilityStatus.status is a
+ * closed enum today, but SSE `capability.*` events widen it to an open
+ * union), so this never throws on an unrecognized value.
+ */
+export function statusSentence(kind: string, label: string, status: string): string {
+  if (status === 'unavailable') return cannotAnswerSentence(kind, label);
+  if (status === 'degraded') {
+    return (MAY_BE_INCOMPLETE[kind] ?? ((l: string) => `${l} may be degraded right now.`))(label);
+  }
+  return `${label} reported an unrecognized status ("${status}").`;
+}
+
+/**
+ * Applies an SSE capability.degraded/unavailable event to a cached
+ * packs/active descriptor -- pure so the mid-stream cache patch in page.tsx
+ * is unit-testable without React or TanStack Query. Unknown capability ids
+ * are appended as a minimal entry rather than dropped, since the descriptor
+ * may not have been fetched yet when the event arrives.
+ */
+export function patchCapabilityStatus(
+  data: PacksActive,
+  capabilityId: string,
+  status: string,
+  reason: string,
+): PacksActive {
+  const existing = data.capabilities.find((c) => c.capability_id === capabilityId);
+  const patchedStatus: Capability['status'] = {
+    capability_id: capabilityId,
+    status,
+    reason,
+    since: existing?.status?.since ?? null,
+  };
+  if (!existing) {
+    return {
+      ...data,
+      capabilities: [
+        ...data.capabilities,
+        { capability_id: capabilityId, kind: 'unknown', description: null, status: patchedStatus },
+      ],
+    };
+  }
+  return {
+    ...data,
+    capabilities: data.capabilities.map((c) =>
+      c.capability_id === capabilityId ? { ...c, status: patchedStatus } : c,
+    ),
+  };
 }

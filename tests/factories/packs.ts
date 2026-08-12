@@ -23,6 +23,17 @@ export function packsActiveMbs(): PacksActive {
           since: null,
         },
       },
+      {
+        capability_id: 'mbs.prepaid_speed',
+        kind: 'risk_measure',
+        description: 'Prepayment speed',
+        status: {
+          capability_id: 'mbs.prepaid_speed',
+          status: 'degraded',
+          reason: 'model server responding slowly',
+          since: '2026-01-01T00:00:00Z',
+        },
+      },
     ],
   };
 }
@@ -47,6 +58,17 @@ export function packsActiveEquity(): PacksActive {
           status: 'available',
           reason: null,
           since: null,
+        },
+      },
+      {
+        capability_id: 'equity.factor_exposure',
+        kind: 'risk_measure',
+        description: 'Factor exposure',
+        status: {
+          capability_id: 'equity.factor_exposure',
+          status: 'degraded',
+          reason: 'partial factor coverage',
+          since: '2026-01-01T00:00:00Z',
         },
       },
     ],
@@ -97,6 +119,21 @@ export function packsActiveSynthetic(): PacksActive {
           status: 'available',
           reason: null,
           since: null,
+        },
+      },
+      {
+        capability_id: 'crypto.tool.oracle',
+        kind: 'tool',
+        description: 'Price oracle',
+        // An unrecognized status value -- `status` is an open string, not a
+        // closed enum, precisely so a value like this still renders (see
+        // statusSentence()'s fallback branch) instead of failing the whole
+        // packs/active fetch.
+        status: {
+          capability_id: 'crypto.tool.oracle',
+          status: 'melting',
+          reason: 'vendor reported an unknown state',
+          since: '2026-01-01T00:00:00Z',
         },
       },
     ],
