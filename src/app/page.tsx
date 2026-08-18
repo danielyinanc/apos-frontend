@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AposUIMessage } from '@/lib/ai/messages';
+import type { Blotter } from '@/lib/sse/schema';
 import { createAposChatTransport } from '@/lib/ai/transport';
 import { usePacksActive } from '@/lib/query/hooks';
 import { qk } from '@/lib/query/keys';
@@ -19,8 +20,24 @@ import { Transcript, findBlockedOutcome, BlockedByCompliance } from '@/component
 import { Composer } from '@/components/chat/Composer';
 import { StreamingLiveRegion } from '@/components/chat/StreamingLiveRegion';
 
+function newThreadId(): string {
+  // `crypto.randomUUID()` is unavailable in an insecure origin such as the
+  // Docker service hostname used by the Playwright E2E runner. Keep the UI
+  // functional there while retaining UUIDs in secure browser contexts.
+  if (typeof window !== 'undefined') {
+    const existing = window.localStorage.getItem('apos-thread-id');
+    if (existing) return existing;
+  }
+  const id =
+    typeof crypto.randomUUID === 'function'
+      ? `t-${crypto.randomUUID()}`
+      : `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  if (typeof window !== 'undefined') window.localStorage.setItem('apos-thread-id', id);
+  return id;
+}
+
 export default function Page() {
-  const [threadId] = useState(() => `t-${crypto.randomUUID()}`);
+  const [threadId] = useState(newThreadId);
   const transport = useMemo(() => createAposChatTransport(), []);
 
   // sendMessage()'s promise resolves even when the transport request fails
@@ -31,7 +48,7 @@ export default function Page() {
   // those closures were created, not live-updated by later renders.
   const lastErrorRef = useRef<Error | null>(null);
   const queryClient = useQueryClient();
-  const { messages, sendMessage, status, clearError } = useChat<AposUIMessage>({
+  const { messages, setMessages, sendMessage, status, clearError } = useChat<AposUIMessage>({
     transport,
     onError: (err) => {
       // The transport's error message is the raw response body text (often
@@ -58,6 +75,43 @@ export default function Page() {
       );
     },
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`/api/threads/${encodeURIComponent(threadId)}`, { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((record: {
+        lastRunId?: string;
+        pendingInterrupt?: { interruptId: string | null; blotter: Blotter };
+      } | null) => {
+        if (cancelled || !record?.pendingInterrupt) return;
+        const pending = record.pendingInterrupt;
+        const runId = record.lastRunId ?? `rehydrated-${threadId}`;
+        setMessages([
+          {
+            id: `rehydrated:${threadId}`,
+            role: 'assistant',
+            parts: [
+              {
+                type: 'data-apos-interrupt',
+                id: `interrupt:${runId}`,
+                data: {
+                  interruptId: pending.interruptId,
+                  blotter: pending.blotter,
+                  tsMs: Date.now(),
+                  runId,
+                  threadId,
+                },
+              },
+            ],
+          },
+        ]);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [setMessages, threadId]);
 
   // Reconcile the patched cache against the descriptor's own next fetch once
   // the run truly settles -- the SSE patch is authoritative for the moment

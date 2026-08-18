@@ -26,14 +26,22 @@ export function Transcript({
               );
             }
             if (part.type === 'data-apos-tool') {
+              // Tool lifecycle events are internal telemetry, not assistant
+              // content. Showing "core.market_value — finished" makes the
+              // transcript look like the model answered with a tool name.
+              // Failures remain visible through the capability-status notice.
+              return null;
+            }
+            if (part.type === 'data-apos-citation') {
               return (
-                <div
+                <span
                   key={part.id ?? i}
-                  className="my-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-fg-muted)]"
+                  data-capture="citation-chip"
+                  className="my-1 mr-1 inline-block rounded border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-fg-muted)]"
+                  title={`Source: ${part.data.capabilityId}`}
                 >
-                  {part.data.capabilityId} — {part.data.phase}
-                  {part.data.reason ? `: ${part.data.reason}` : ''}
-                </div>
+                  Source: {part.data.capabilityId} · {part.data.citationId}
+                </span>
               );
             }
             if (part.type === 'data-apos-capability-status') {

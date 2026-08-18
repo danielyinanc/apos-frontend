@@ -10,6 +10,7 @@ export function BlockedByCompliance({
   return (
     <div
       role="status"
+      aria-label="Order blocked by compliance and auto-rejected by the server"
       className="rounded border-2 border-[var(--color-negative)] bg-[var(--color-panel)] p-3"
     >
       <p className="font-semibold text-[var(--color-negative)]">

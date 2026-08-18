@@ -107,9 +107,9 @@ export function ApprovalCard({
       aria-busy={busy !== null}
       className="rounded border border-[var(--color-accent)] bg-[var(--color-panel)] p-3 outline-none"
     >
-      <p id={`approval-${blotter.id}`} className="font-semibold">
+      <h2 id={`approval-${blotter.id}`} className="font-semibold">
         Approval required: {blotter.side} {blotter.quantity} of {blotter.instrument_id}
-      </p>
+      </h2>
       <fieldset disabled={busy !== null} className="mt-3 flex flex-wrap gap-2">
         <legend className="sr-only">Decision</legend>
         <button
