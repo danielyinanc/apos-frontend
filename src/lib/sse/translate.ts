@@ -20,6 +20,8 @@ type Chunk = UIMessageChunk<AposMetadata, AposDataParts>;
 export function createAposToUiChunkStream(opts: {
   messageId: string;
   onLastSeq?: (seq: number) => void;
+  onRunStarted?: (runId: string, threadId: string) => void;
+  onInterrupt?: (runId: string, threadId: string, interruptId: string | null, blotter: unknown) => void;
 }): TransformStream<EnvelopeOrNotice, Chunk> {
   let textBlockId: string | null = null;
   let accumulated = '';
@@ -86,6 +88,7 @@ export function createAposToUiChunkStream(opts: {
             started = true;
             ctrl.enqueue({ type: 'start', messageId: opts.messageId });
           }
+          opts.onRunStarted?.(env.run_id, env.thread_id);
           ctrl.enqueue({ type: 'start-step' });
           ctrl.enqueue({
             type: 'data-apos-run',
@@ -215,6 +218,7 @@ export function createAposToUiChunkStream(opts: {
         case 'interrupt': {
           const d = parseData(AposDataSchemas['interrupt']);
           if (!d) return;
+          opts.onInterrupt?.(env.run_id, env.thread_id, d.interrupt_id, d.blotter);
           closeText(ctrl);
           ctrl.enqueue({
             type: 'data-apos-interrupt',

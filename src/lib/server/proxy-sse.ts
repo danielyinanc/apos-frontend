@@ -4,6 +4,7 @@ import { serverEnv } from '@/env/server';
 import { createSseFrameStream } from '@/lib/sse/parse';
 import { createAposEnvelopeStream } from '@/lib/sse/envelope-stream';
 import { createAposToUiChunkStream } from '@/lib/sse/translate';
+import { threadStore } from '@/lib/server/thread-store';
 
 /**
  * Proxies a POST to an apos-backend SSE route, owns the Authorization header
@@ -67,7 +68,18 @@ export async function proxyAposSse(
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(createSseFrameStream())
     .pipeThrough(createAposEnvelopeStream())
-    .pipeThrough(createAposToUiChunkStream({ messageId }))
+    .pipeThrough(
+      createAposToUiChunkStream({
+        messageId,
+        onRunStarted: (runId, threadId) => threadStore.touch(threadId, { lastRunId: runId }),
+        onInterrupt: (_runId, threadId, interruptId, blotter) =>
+          threadStore.setPendingInterrupt(threadId, {
+            interruptId,
+            blotter,
+            capturedAtMs: Date.now(),
+          }),
+      }),
+    )
     .pipeThrough(new JsonToSseTransformStream())
     .pipeThrough(new TextEncoderStream());
 
